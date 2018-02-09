@@ -20,6 +20,7 @@ import java.sql.Timestamp;
 import java.util.*;
 import ruraomsk.list.ru.strongsql.DescrValue;
 import ruraomsk.list.ru.strongsql.ParamSQL;
+import ruraomsk.list.ru.strongsql.SetData;
 import ruraomsk.list.ru.strongsql.SetValue;
 import ruraomsk.list.ru.strongsql.StrongSql;
 
@@ -271,7 +272,7 @@ public class ModemDeviceDriver extends AbstractDeviceDriver {
             if (count == null) {
                 return result;
             }
-            ArrayList<SetValue> asv = sqlseek.seekData(dfrom, dto, count);
+            ArrayList<SetValue> asv = sqlseek.seekData(dfrom, dto, svar);
             for (SetValue sv : asv) {
                 if (sv.getTime() == 0L) {
                     continue;
@@ -470,12 +471,14 @@ public class ModemDeviceDriver extends AbstractDeviceDriver {
             long longSQL = rec.getLong("longSQL");
             long stepSQL = rec.getLong("stepSQL");
             DataTable regData = getDeviceContext().getVariable("registers", getDeviceContext().getCallerController());
+            String Tabledescription = rec.getString("description");
             if (initSQL) {
-                Log.CORE.error("Создаем базу .....");
+                Log.CORE.error("Создаем базу " + Tabledescription);
                 ArrayList<DescrValue> arraydesc = new ArrayList<>();
                 int count = 0;
                 for (DataRecord reg : regData) {
                     String name = reg.getString("name");
+                    String description = reg.getString("description");
                     int type = 0;
                     switch (reg.getInt("format")) {
                         case 2:
@@ -492,10 +495,10 @@ public class ModemDeviceDriver extends AbstractDeviceDriver {
                             type = 2;
                             break;
                     }
-                    arraydesc.add(new DescrValue(name, count++, type));
+                    arraydesc.add(new DescrValue(name, description, type));
                 }
-                new StrongSql(param, arraydesc, 0, longSQL, new Date().toString());
-                Log.CORE.error("Создали базу .....");
+                new StrongSql(param, arraydesc, Tabledescription);
+                Log.CORE.error("Создали базу " + Tabledescription);
                 DataTable cp = getDeviceContext().getVariable("SQLProperties", getDeviceContext().getCallerController());
                 cp.rec().setValue("initSQL", false);
                 getDeviceContext().setVariable("SQLProperties", getDeviceContext().getCallerController(), cp);
@@ -681,22 +684,21 @@ public class ModemDeviceDriver extends AbstractDeviceDriver {
 
     @Override
     public void finishSynchronization() throws DeviceException, DisconnectionException {
-        lastTime = new Date().getTime();
         try {
-            ArrayList<SetValue> arrayValues = new ArrayList<>();
             DataTable tregs = getDeviceContext().getVariable("registers", getDeviceContext().getCallerController());
-            int count = 0;
+
+            SetData sd = new SetData(new Timestamp(System.currentTimeMillis()));
             for (DataRecord recregs : tregs) {
                 String vname = recregs.getString("name");
                 DataTable tvar = getDeviceContext().getVariable(vname, getDeviceContext().getCallerController());
                 Object obj = tvar.getRecord(0).getValue(0);
-                arrayValues.add(new SetValue(count++, obj));
+                sd.AddValue(new SetValue(vname, obj));
             }
-            if (!arrayValues.isEmpty()) {
-                sqldata.addValues(new Timestamp(System.currentTimeMillis()), arrayValues);
+            if (!sd.datas.isEmpty()) {
+                sqldata.addValues(sd);
             }
         } catch (ContextException ex) {
-            Log.CORE.info("ContextException " + ex.getMessage());
+            Log.CORE.error("ContextException " + ex.getMessage());
             throw new DeviceException(ex);
         }
         super.finishSynchronization(); //To change body of generated methods, choose Tools | Templates.
@@ -812,6 +814,7 @@ public class ModemDeviceDriver extends AbstractDeviceDriver {
         VFT_SQL.addField(FieldFormat.create("<url><S><A=jdbc:postgresql://localhost:5432/cyclebuff><D=Url базы данных дампов>"));
         VFT_SQL.addField(FieldFormat.create("<JDBCDriver><S><A=org.postgresql.Driver><D=Драйвер базы данных>"));
         VFT_SQL.addField(FieldFormat.create("<table><S><A=buffer><D=Таблица дампа>"));
+        VFT_SQL.addField(FieldFormat.create("<description><S><A=Переменные с устройства><D=Описание таблицы хранения>"));
         VFT_SQL.addField(FieldFormat.create("<user><S><D=Пользователь>"));
         VFT_SQL.addField(FieldFormat.create("<password><S><D=Пароль>"));
         VFT_SQL.addField(FieldFormat.create("<stepSQL><L><A=5000><D=Интервал сохранения переменных в БД >"));
